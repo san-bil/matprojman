@@ -2,7 +2,7 @@
 
 echo "Creating $HOME/bin/matprojman folder..."
 mkdir -p $HOME/bin/matprojman
-echo "cp -R $( readlink -f $( dirname $( dirname $0 ) ) )/* $HOME/bin/matprojman/"
+cp -R $( readlink -f $( dirname $( dirname $0 ) ) )/* $HOME/bin/matprojman/
 
 echo "Installing requirements..."
 pip install --user -r $HOME/bin/matprojman/requirements.txt
