@@ -8,6 +8,8 @@ echo -e "Installing requirements...\n"
 pip install --user -r $HOME/bin/matprojman/requirements.txt
 
 echo -e "Add the following to your .zshrc or .bashrc file (or whatever analogue for your own shell)\n"
+echo -e "########################################################\n\n"
 cat $(readlink -f $( dirname $( dirname $0 ) ) )/.add_path_example.txt
+echo -e "########################################################\n\n"
 
 
