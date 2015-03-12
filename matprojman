@@ -1,0 +1,4 @@
+#!/bin/bash
+
+python `dirname $0`/matlab_project_manager.py "$@"
+

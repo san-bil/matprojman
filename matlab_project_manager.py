@@ -99,7 +99,7 @@ def write_new_requirements_file(matlab_requirements_file, new_requirements):
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Matlab project manager. Requires gitpython (installable via pip)')
-    parser.add_argument('-p','--project_folder', help='folder containing matlab project')
+    parser.add_argument('-p','--project_folder', help='folder containing matlab project', required=True)
     args = parser.parse_args()
     arg_dict = vars(args)    
     project_folder = arg_dict['project_folder']
