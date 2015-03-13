@@ -132,7 +132,7 @@ def pull_dep_changes(deps_folder, just_cloned):
 
 def find_child_dependencies(project_folder):
     # find all matlab_requirements.txt files in /deps/ folder (i.e. in child repos), and add them to the matlab_requirements.txt of the top-level project. THEN RUN THIS COMMAND AGAIN.
-    all_matlab_requirements_files = subprocess.check_output("find %s -type f -mindepth 2 -name matlab_requirements.txt " % project_folder, shell=True).split('\n')
+    all_matlab_requirements_files = subprocess.check_output("find %s -mindepth 2 -type f -name matlab_requirements.txt " % project_folder, shell=True).split('\n')
     child_matlab_requirements=[]
     for mrf in all_matlab_requirements_files:
         if not mrf=='':
