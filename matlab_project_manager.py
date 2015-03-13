@@ -5,6 +5,51 @@ import shutil
 import git
 from git import Repo
 import subprocess
+import warnings
+from collections import defaultdict
+import re
+
+def split_repo_name(repo_url):
+    parts = os.path.split(repo_url.strip())
+    filtered_parts = (parts[0],os.path.splitext(parts[1])[0])
+    return filtered_parts
+
+def remove_https_dep_dups(repo_url_set):
+    md = defaultdict(list)
+    for repo_url in repo_url_set:
+        cleaned_repo_url = repo_url.strip()
+        extless_repo = os.path.splitext(cleaned_repo_url)[0]
+        if "@" in extless_repo:
+            tmp = re.split('@',extless_repo)[-1]
+            repo_name = tmp.split(":")[-1].strip()
+        elif "http" in extless_repo:
+            tmp = re.split('://',extless_repo)[-1]
+            repo_name = tmp.split('/', 1)[-1].strip()
+        
+        md[repo_name].append(cleaned_repo_url)
+
+    deduped = []
+    for key in md.keys():
+        l = md[key]
+        deduped_l = [dep for dep in l if "http" not in dep]
+        deduped+=deduped_l
+
+    return deduped
+
+def check_for_repo_name_clashes(repo_url_set):
+    md = defaultdict(list)
+    for repo_url in repo_url_set:
+        repo_parts = split_repo_name(repo_url)
+        md[repo_parts[1]].append(repo_url.strip())
+    
+    for key in md.keys():
+        if len(md[key])>1:
+            dup_list = "\n".join(md[key])+"\n"
+            msg = '\n'+'#'*50 + "\n\nMultiple repos named \'%s\' will be added to deps: \n\n %s \n There is a possibility for name clashes.\n\n"%(key,dup_list) +'#'*50+'\n'
+            raise Exception(msg)
+            
+        
+    
 
 def mkdirp(path):
     if not os.path.isdir(path):
@@ -63,21 +108,27 @@ def read_top_level_requirements(matlab_requirements_file):
 
 def clone_new_deps(cleaned_requirements, deps_folder):
     # in the folder ./deps clone each repo specified in the matlab_requirements.txt file, if it doesn't already exist
+    new_deps = []
     for repo in cleaned_requirements:
-        repo_folder_name = (repo.strip().split('/')[-1]).split('.')[0]
-        print "Checking for: "+ repo_folder_name
-        if not os.path.isdir(os.path.join(deps_folder,repo_folder_name)):
-            print "--------  Fetching %s --------" % repo
-            Repo.clone_from(repo.strip(), os.path.join(deps_folder,repo_folder_name))
+        dep_folder = (repo.strip().split('/')[-1]).split('.')[0]
+        print "Checking for: "+ dep_folder
+        if not os.path.isdir(os.path.join(deps_folder,dep_folder)):
+            print "--------  Fetching %s --------" % repo.strip()
+            dep_folder = os.path.join(deps_folder,dep_folder)
+            new_deps.append(dep_folder)
+            Repo.clone_from(repo.strip(), dep_folder)
+    return new_deps
 
-def pull_dep_changes(deps_folder):
+def pull_dep_changes(deps_folder, just_cloned):
     # for each repo cloned into deps, fetch changes. ANY UPDATES MUST BE MERGED MANUALLY.    
     deps_child_folders = os.listdir(deps_folder)
     for deps_child_folder in deps_child_folders:
         if(os.path.isdir(os.path.join(deps_folder,deps_child_folder))):
-            g = git.cmd.Git(os.path.join(deps_folder,deps_child_folder))
-            print "Pulling changes for %s" % deps_child_folder
-            g.pull()
+            dep_folder = os.path.join(deps_folder,deps_child_folder)
+            if not dep_folder in just_cloned:
+                g = git.cmd.Git(dep_folder)
+                print "Pulling changes for %s" % deps_child_folder
+                g.pull()
 
 def find_child_dependencies(project_folder):
     # find all matlab_requirements.txt files in /deps/ folder (i.e. in child repos), and add them to the matlab_requirements.txt of the top-level project. THEN RUN THIS COMMAND AGAIN.
@@ -85,7 +136,7 @@ def find_child_dependencies(project_folder):
     child_matlab_requirements=[]
     for mrf in all_matlab_requirements_files:
         if not mrf=='':
-            mrf_contents = open(mrf,'r').readlines().split('\n')
+            mrf_contents = open(mrf,'r').readlines()
             child_matlab_requirements = child_matlab_requirements+mrf_contents
 
     all_matlab_requirements_sorted = set(child_matlab_requirements)
@@ -123,21 +174,23 @@ if __name__=="__main__":
 
         top_level_requirements = read_top_level_requirements(matlab_requirements_file)
         all_deps = set(top_level_requirements)
-        
+        just_cloned = []
         while(True):
-            clone_new_deps(list(all_deps), deps_folder)
-            pull_dep_changes(deps_folder)
-            child_deps = set(find_child_dependencies(project_folder))
+            cleaned_https_deps = remove_https_dep_dups(all_deps)
+            check_for_repo_name_clashes(cleaned_https_deps)
             
-            new_all_deps = all_deps.union(child_deps)
+            just_cloned += clone_new_deps(list(all_deps), deps_folder)
+            child_deps = set(find_child_dependencies(project_folder))
+            new_all_deps = all_deps.union(child_deps)            
+            
             if new_all_deps == all_deps:
                 break;
             else:
                 all_deps = new_all_deps
 
-
-        write_new_requirements_file(matlab_requirements_file, all_deps)
-        write_addpath(deps_folder, new_deps_folder, project_src_folder, addpath_script)
+        pull_dep_changes(deps_folder, just_cloned)
+        write_new_requirements_file(matlab_requirements_file, cleaned_https_deps)
+        # write_addpath(deps_folder, new_deps_folder, project_src_folder, addpath_script)
         # if current project folder is not a git repo, initialize git repo
         write_gitignore(gitignore_file)
         if not os.path.isdir(os.path.join(project_folder,'.git')):
